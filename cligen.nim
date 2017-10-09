@@ -1,5 +1,8 @@
 import macros, tables, parseopt3, strutils, os
 
+type
+  InvalidArgumentException* = object of Exception
+
 proc toString(c: char): string =
   result = newStringOfCap(1)
   if c != '\0': result.add(c)
@@ -102,7 +105,7 @@ proc newParam(id: string, rhs: NimNode): NimNode =
 
 macro dispatchGen*(pro: typed, cmdName: string="", doc: string="",
                    help: typed= {}, short: typed= {}, usage: string
-="${prelude}$command $args\n$doc  Options(opt-arg sep :|=|spc):\n$options$sep",
+="${prelude}$command$args\n$doc\nOptions:\n$options$sep",
                    prelude = "Usage:\n  ", echoResult: bool = false,
                    requireSeparator: bool = false, sepChars = "=:",
                    helpTabColumnGap: int=2, helpTabMinLast: int=16,
@@ -193,7 +196,7 @@ macro dispatchGen*(pro: typed, cmdName: string="", doc: string="",
         @[ [ "--help, -?", "", "", "print this help message" ] ]
       var `shortBoolId`: string = "?"   # argHelp(..,bool,..) updates these
       var `longBoolId`: seq[string] = @[ "help" ])
-    var args = "[optional-params]" & mandHelp &
+    var args = mandHelp &
                (if posIx != -1: " [" & $(fpars[posIx][0]) & "]" else: "")
     for i in 1 ..< len(fpars):
       let idef = fpars[i]
@@ -223,7 +226,7 @@ macro dispatchGen*(pro: typed, cmdName: string="", doc: string="",
     result = newNimNode(nnkCaseStmt).add(quote do: optionNormalize(`keyId`))
     result.add(newNimNode(nnkOfBranch).add(
       newStrLitNode("help"),newStrLitNode("?")).add(
-        quote do: stderr.write(`helpId`); raise newException(`HelpOnlyId`,"")))
+        quote do: raise newException(InvalidArgumentException, "")))
     for i in 1 ..< len(fpars):                # build per-param case clauses
       if i == posIx: continue                 # skip variable len positionals
       if i in mandatory: continue             # skip mandator arguments
@@ -316,13 +319,13 @@ macro dispatchGen*(pro: typed, cmdName: string="", doc: string="",
       try:
         `callPrs`
         `callWrapd`
-      except `HelpOnlyId`:
-        discard
+      except InvalidArgumentException:
+        stderr.write(`helpId`)
   when defined(printDispatch): echo repr(result)  # maybe print generated code
 
 macro dispatch*(pro: typed, cmdName: string="", doc: string="",
                 help: typed = { }, short: typed = { }, usage: string
-="${prelude}$command $args\n$doc  Options(opt-arg sep :|=|spc):\n$options$sep",
+="${prelude}$command $args\n$doc\n  Options:\n$options$sep",
                 prelude = "Usage:\n  ", echoResult: bool = false,
                 requireSeparator: bool = false, sepChars = "=:",
                 helpTabColumnGap=2, helpTabMinLast=16, helpTabRowSep="",
