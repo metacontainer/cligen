@@ -137,7 +137,7 @@ proc delItem*[T](x: var seq[T], item: T): int =
 type Version* = tuple[longOpt: string, output: string]
 
 const dflUsage = "${prelude}$command $args\n" &
-                 "$doc  Options(opt-arg sep :|=|spc):\n" &
+                 "$doc  Options:\n" &
                  "$options$sep"
 
 macro dispatchGen*(pro: typed, cmdName: string = "", doc: string = "",
@@ -298,8 +298,7 @@ macro dispatchGen*(pro: typed, cmdName: string = "", doc: string = "",
        var versionDflt = false
        `apId`.parNm = `vsnOpt`; `apId`.parSh = `vsnSh`; `apId`.parReq = 0
        `tabId`.add(argHelp(versionDflt, `apId`) & "write version to stdout"))
-    let argStart = if mandatory.len > 0: "[required&optional-params]" else:
-                                         "[optional-params]"
+    let argStart = "[params]"
     var args = argStart &
                (if posIx != -1: " [" & $(fpars[posIx][0]) & "]" else: "")
     for i in 1 ..< len(fpars):
