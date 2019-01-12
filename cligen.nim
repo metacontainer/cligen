@@ -254,6 +254,7 @@ macro dispatchGen*(pro: typed, cmdName: string = "", doc: string = "",
                 "` has neither a type nor a default value")
         if $fpars[i][0] notin implDef:
           mandatory.add(i)
+  let autoPositionalNo = ident("autoPositionalNo") # which automatic positional argument is now being processed
   let posNoId = ident("posNo")          # positional arg number
   let keyCountId = ident("keyCount")    # positional arg number
   let docId = ident("doc")              # gen proc parameter
@@ -285,6 +286,7 @@ macro dispatchGen*(pro: typed, cmdName: string = "", doc: string = "",
       var `apId`: ArgcvtParams
       `apId`.mand = `mandHelp`
       `apId`.delimit = `delim`
+      var `autoPositionalNo` = 0
       let shortH = $(`shortHlp`)
       var `allId`: seq[string] = @[ "help" ]
       var `mandId`: seq[string] = @[ ]
@@ -388,6 +390,8 @@ macro dispatchGen*(pro: typed, cmdName: string = "", doc: string = "",
                    mb & "Run with --help for full usage.\n")
       raise newException(ParseError, "Unknown option")))
 
+  let optCases=defOptCases()
+
   proc defNonOpt(): NimNode =
     result = newStmtList()
     if posIx != -1:                           # code to parse non-option args
@@ -410,10 +414,24 @@ macro dispatchGen*(pro: typed, cmdName: string = "", doc: string = "",
         if rewind: `posId`.setLen(0)
         `posId`.add(`tmpId`)))
     else:
+      var argNames: seq[string]
+      for i in mandatory: argNames.add($fpars[i][0])
+
       result.add(quote do:
-        stderr.write(`proNm` & " does not expect non-option arguments.  Got\n" &
-                     $`pId` & "\nRun with --help for full usage.\n")
-        raise newException(ParseError, "Unexpected non-option " & $`pId`))
+        if `autoPositionalNo` >= `mandatory`.len:
+          stderr.write("Too many not-option arguments.  Got\n" &
+            $`pId` & "\nRun with --help for full usage.\n")
+          raise newException(ParseError, "Too many not-option arguments.")
+
+        let name = when `mandatory`.len>0: `argNames`[`autoPositionalNo`] else: ""
+        `autoPositionalNo` += 1
+
+        `pId`.kind = cmdLongOption
+        `pId`.key = name
+        `pId`.val = `pId`.cmd[`pId`.pos-1]
+        `pId`.sep = "="
+        `optCases`
+      )
 
   let argPreP=argPre; let argPostP=argPost  #XXX ShouldBeUnnecessary
   proc callParser(): NimNode =
@@ -422,7 +440,7 @@ macro dispatchGen*(pro: typed, cmdName: string = "", doc: string = "",
       parser()
       if len(`argPostP`) > 0: parser(`argPostP`)  #Extra *compile-time* input
 
-  let iniVar=initVars(); let optCases=defOptCases(); let nonOpt=defNonOpt()
+  let iniVar=initVars(); let nonOpt=defNonOpt()
   let callPrs=callParser(); let retType=fpars[0]  #XXX ShouldBeUnnecessary
   result = quote do:
     from os               import commandLineParams
